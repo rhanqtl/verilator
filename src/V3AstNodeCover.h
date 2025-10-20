@@ -44,27 +44,6 @@
 
 // Covergroup is represented by AstClass
 
-#define VL_ENUM_ELEMENT(x) x,
-#define VL_ENUM_STRING(x) #x,
-
-#define VL_ENUM(name, elements) VL_ENUM_SIZED(name, uint8_t, elements)
-#define VL_ENUM_SIZED(name, underlying, elements) \
-    class name final { \
-    public: \
-        enum en : underlying { elements(VL_ENUM_ELEMENT) }; \
-        const en m_e; \
-        const char* ascii() const { \
-            static const char* const names[] = {elements(VL_ENUM_STRING)}; \
-            return names[m_e]; \
-        } \
-        constexpr name(en _e) \
-            : m_e{_e} {} \
-        constexpr operator en() const { return m_e; } \
-    }; \
-    constexpr bool operator==(const name& lhs, const name& rhs) { return lhs.m_e == rhs.m_e; } \
-    constexpr bool operator==(const name& lhs, name::en rhs) { return lhs.m_e == rhs; } \
-    constexpr bool operator==(name::en lhs, const name& rhs) { return lhs == rhs.m_e; }
-
 class AstNodeBinsSelect VL_NOT_FINAL : public AstNodeExpr {
 public:
     AstNodeBinsSelect(VNType kind, FileLine* fl)
@@ -73,9 +52,43 @@ public:
     ASTGEN_MEMBERS_AstNodeBinsSelect;
 };
 
-#define COVERAGE_BIN_KIND(X) X(BINS) X(ILLEGAL_BINS) X(IGNORE_BINS)
-VL_ENUM(VCoverBinKind, COVERAGE_BIN_KIND)
-#undef COVERAGE_BIN_KIND
+class VCoverBinKind final {
+public:
+    enum en : uint8_t {
+        BINS,
+        ILLEGAL_BINS,
+        IGNORE_BINS,
+    };
+    en m_e;
+    VCoverBinKind()
+        : m_e{BINS} {}
+
+    constexpr VCoverBinKind(en _e)
+        : m_e{_e} {}
+    constexpr VCoverBinKind(int _e)
+        : m_e{static_cast<en>(_e)} {}
+    const char* ascii() const {
+        static const char* const names[] = {
+            "bins",
+            "illegal_bins",
+            "ignore_bins",
+        };
+        return names[m_e];
+    }
+    constexpr operator en() const { return m_e; }
+    constexpr bool isPlain() const { return m_e == BINS; }
+    constexpr bool isIllegal() const { return m_e == ILLEGAL_BINS; }
+    constexpr bool isIgnore() const { return m_e == IGNORE_BINS; }
+};
+constexpr bool operator==(const VCoverBinKind& lhs, const VCoverBinKind& rhs) {
+    return lhs.m_e == rhs.m_e;
+}
+constexpr bool operator==(const VCoverBinKind& lhs, VCoverBinKind ::en rhs) {
+    return lhs.m_e == rhs;
+}
+constexpr bool operator==(VCoverBinKind ::en lhs, const VCoverBinKind& rhs) {
+    return lhs == rhs.m_e;
+}
 
 class AstCoverBin final : public AstNode {
     // Represents a coverage bin definition
@@ -116,15 +129,29 @@ public:
 class AstCoverCross final : public AstNode {
     // Represents a covergroup cross definition
     //
-    // @astgen op1 := itemsp : List[AstCoverpoint]
+    // @astgen op1 := itemsp : List[AstNode]
     // @astgen op2 := iffp : Optional[AstNodeExpr]
-    // @astgen op3 := binsp : List[AstCoverBin]
-    // @astgen op4 := optionsp : List[AstCoverOption]
+    // @astgen op3 := bodyp : Optional[AstCoverCrossBody]
+    std::string name;
 
 public:
-    AstCoverCross(FileLine* fl)
-        : AstNode{VNType::CoverCross, fl} {}
+    AstCoverCross(FileLine* fl, const std::string& name)
+        : AstNode{VNType::CoverCross, fl}
+        , name{name} {}
     ASTGEN_MEMBERS_AstCoverCross;
+};
+
+class AstCoverCrossBody final : public AstNode {
+    // Represents a covergroup cross body
+    //
+    // @astgen op1 := binsp : List[AstNodeBinsSelect]
+    // @astgen op2 := optionsp : List[AstCoverOption]
+    // @astgen op3 := funcsp : List[AstFunc]
+
+public:
+    AstCoverCrossBody(FileLine* fl)
+        : AstNode{VNType::CoverCrossBody, fl} {}
+    ASTGEN_MEMBERS_AstCoverCrossBody;
 };
 
 class AstCoverOption final : public AstNode {
@@ -139,8 +166,8 @@ public:
         : AstNode{VNType::CoverOption, fl}
         , m_name{name}
         , m_type_option{type_option} {
-          this->valuep(valuep);
-        }
+        this->valuep(valuep);
+    }
     ASTGEN_MEMBERS_AstCoverOption;
     const string& optionName() const { return m_name; }
     void optionName(const string& name) { m_name = name; }
@@ -152,29 +179,71 @@ public:
 class AstCoverpoint final : public AstNode {
     // Represents a coverpoint definition
     //
-    // @astgen op1 := exprp : AstNodeExpr                  // Target expression
+    // @astgen op1 := exprp : AstNodeExpr
     // @astgen op2 := childDTypep : Optional[AstNodeDType]
     // @astgen op3 := iffp : Optional[AstNodeExpr]
-    // @astgen op4 := binsp : List[AstCoverBin]      // Coverage bins
-    // @astgen op5 := optionsp : List[AstCoverOption]  // Coverpoint options
-    bool m_implicit : 1;
+    // @astgen op4 := bodyp : Optional[AstCoverpointBody]
+    std::string name;
+    bool m_implicit : 1;  // true if implicit for cross
 
 public:
-    explicit AstCoverpoint(FileLine* fl)
+    explicit AstCoverpoint(FileLine* fl, const std::string& name)
         : AstNode{VNType::Coverpoint, fl}
+        , name{name}
         , m_implicit{false} {}
     ASTGEN_MEMBERS_AstCoverpoint;
     bool isImplicit() const { return m_implicit; }
     void isImplicit(bool flag) { m_implicit = flag; }
 };
 
-#define TRANS_RANGE_LIST_ELEMENTS(X) \
-    X(NONE) \
-    X(CONSECUTIVE) \
-    X(NONCONSECUTIVE) \
-    X(GOTO)
-VL_ENUM(VTransRangeListKind, TRANS_RANGE_LIST_ELEMENTS)
-#undef TRANS_RANGE_LIST_ELEMENTS
+class AstCoverpointBody final : public AstNode {
+    // Represents the body of a coverpoint
+    //
+    // @astgen op1 := binsp : List[AstCoverBin]      // Coverage bins
+    // @astgen op2 := optionsp : List[AstCoverOption] // Coverpoint options
+
+public:
+    AstCoverpointBody(FileLine* fl)
+        : AstNode{VNType::CoverpointBody, fl} {}
+    ASTGEN_MEMBERS_AstCoverpointBody;
+};
+
+class VTransRangeListKind final {
+public:
+    enum en : uint8_t { NONE = 0, CONSECUTIVE, NONCONSECUTIVE, GOTO };
+    en m_e;
+    VTransRangeListKind()
+        : m_e{NONE} {}
+
+    // cppcheck-suppress noExplicitConstructor
+    constexpr VTransRangeListKind(en _e)
+        : m_e{_e} {}
+    constexpr VTransRangeListKind(int _e)
+        : m_e{static_cast<en>(_e)} {}
+    const char* ascii() const {
+        static const char* const names[] = {
+            "NONE",
+            "CONSECUTIVE",
+            "NONCONSECUTIVE",
+            "GOTO",
+        };
+        return names[m_e];
+    }
+    constexpr operator en() const { return m_e; }
+    constexpr bool isNone() const { return m_e == NONE; }
+    constexpr bool isConsecutive() const { return m_e == CONSECUTIVE; }
+    constexpr bool isNonconsecutive() const { return m_e == NONCONSECUTIVE; }
+    constexpr bool isGoto() const { return m_e == GOTO; }
+};
+constexpr bool operator==(const VTransRangeListKind& lhs, const VTransRangeListKind& rhs) {
+    return lhs.m_e == rhs.m_e;
+}
+constexpr bool operator==(const VTransRangeListKind& lhs, VTransRangeListKind ::en rhs) {
+    return lhs.m_e == rhs;
+}
+constexpr bool operator==(VTransRangeListKind ::en lhs, const VTransRangeListKind& rhs) {
+    return lhs == rhs.m_e;
+}
 
 class AstTransRangeList final : public AstNode {
     // Represents a list of transition ranges
@@ -214,6 +283,10 @@ public:
     AstBinsSelectWith(FileLine* fl)
         : AstNodeBinsSelect{VNType::BinsSelectWith, fl} {}
     ASTGEN_MEMBERS_AstBinsSelectWith;
+
+    string emitVerilog() override { V3ERROR_NA_RETURN(""); }
+    string emitC() override { V3ERROR_NA_RETURN(""); }
+    bool cleanOut() const override { return true; }
 };
 
 class AstConditionBinsSelect final : public AstNodeBinsSelect {
@@ -223,11 +296,15 @@ class AstConditionBinsSelect final : public AstNodeBinsSelect {
     // @astgen op2 := intersectsp : List[AstNode]  // Intersects
 
 public:
-    AstConditionBinsSelect(FileLine* fl, AstNode *binsp)
+    AstConditionBinsSelect(FileLine* fl, AstNode* binsp)
         : AstNodeBinsSelect{VNType::ConditionBinsSelect, fl} {
-          this->binsp(binsp);
-        }
+        this->binsp(binsp);
+    }
     ASTGEN_MEMBERS_AstConditionBinsSelect;
+
+    string emitVerilog() override { V3ERROR_NA_RETURN(""); }
+    string emitC() override { V3ERROR_NA_RETURN(""); }
+    bool cleanOut() const override { return true; }
 };
 
 class AstCrossIDBinsSelect final : public AstNodeBinsSelect {
@@ -241,6 +318,10 @@ public:
         , cross_name{name} {}
     ASTGEN_MEMBERS_AstCrossIDBinsSelect;
     const std::string& target() const { return cross_name; }
+
+    string emitVerilog() override { V3ERROR_NA_RETURN(""); }
+    string emitC() override { V3ERROR_NA_RETURN(""); }
+    bool cleanOut() const override { return true; }
 };
 
 class AstCrossSetExprBinsSelect final : public AstNodeBinsSelect {
@@ -248,7 +329,6 @@ class AstCrossSetExprBinsSelect final : public AstNodeBinsSelect {
     //
     // @astgen op1 := exprp : AstNodeExpr  // Set expression
     // @astgen op2 := matchesp : Optional[AstNodeExpr]  // Matches expression
-
 public:
     AstCrossSetExprBinsSelect(FileLine* fl, AstNodeExpr* exprp, AstNodeExpr* matchesp)
         : AstNodeBinsSelect{VNType::CrossSetExprBinsSelect, fl} {
@@ -256,6 +336,9 @@ public:
         this->matchesp(matchesp);
     }
     ASTGEN_MEMBERS_AstCrossSetExprBinsSelect;
+    string emitVerilog() override { V3ERROR_NA_RETURN(""); }
+    string emitC() override { V3ERROR_NA_RETURN(""); }
+    bool cleanOut() const override { return true; }
 };
 
 class AstInvalidBinsSelect final : public AstNodeBinsSelect {
@@ -268,11 +351,9 @@ public:
         this->selectp(selectp);
     };
     ASTGEN_MEMBERS_AstInvalidBinsSelect;
+    string emitVerilog() override { V3ERROR_NA_RETURN(""); }
+    string emitC() override { V3ERROR_NA_RETURN(""); }
+    bool cleanOut() const override { return true; }
 };
-
-#undef VL_ENUM_ELEMENT
-#undef VL_ENUM_STRING
-#undef VL_ENUM
-#undef VL_ENUM_SIZED
 
 #endif  // Guard

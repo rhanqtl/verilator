@@ -2495,13 +2495,14 @@ class AstClass final : public AstNodeModule {
     bool m_needRNG = false;  // Need RNG, uses srandom/randomize
     bool m_useVirtualPublic = false;  // Subclasses need virtual public as uses interface class
     bool m_virtual = false;  // Virtual class
+    bool m_covergroup{false};
 
 public:
     AstClass(FileLine* fl, const string& name, const string& libname)
         : ASTGEN_SUPER_Class(fl, name, libname)
         , m_declTokenNum{fl->tokenNum()} {}
     ASTGEN_MEMBERS_AstClass;
-    string verilogKwd() const override { return "class"; }
+    string verilogKwd() const override { return isCovergroup() ? "covergroup" : "class"; }
     bool maybePointedTo() const override VL_MT_SAFE { return true; }
     void dump(std::ostream& str) const override;
     void dumpJson(std::ostream& str) const override;
@@ -2520,6 +2521,8 @@ public:
     void needRNG(bool flag) { m_needRNG = flag; }
     bool useVirtualPublic() const { return m_useVirtualPublic; }
     void useVirtualPublic(bool flag) { m_useVirtualPublic = flag; }
+    bool isCovergroup() const { return m_covergroup; }
+    void isCovergroup(bool flag) { m_covergroup = flag; }
     // Return true if this class is an extension of base class (SLOW)
     // Accepts nullptrs
     static bool isClassExtendedFrom(const AstClass* refClassp, const AstClass* baseClassp);

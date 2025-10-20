@@ -6753,6 +6753,7 @@ covergroup_declaration<nodep>:  // ==IEEE: covergroup_declaration
         /*cont*/    coverage_spec_or_optionListE
         /*cont*/ yENDGROUP endLabelE
                         { AstClass *cgClassp = new AstClass{$<fl>2, *$2, PARSEP->libname()};
+                          cgClassp->isCovergroup(true);
                           AstFunc* const newp = new AstFunc{$<fl>1, "new", nullptr, nullptr};
                           newp->fileline()->warnOff(V3ErrorCode::NORETURN, true);
                           newp->classMethod(true);
@@ -6764,12 +6765,12 @@ covergroup_declaration<nodep>:  // ==IEEE: covergroup_declaration
 
                           $$ = cgClassp;
                           GRAMMARP->endLabel($<fl>8, $$, $8);
-                          BBCOVERIGN($<fl>1, "Ignoring unsupported: covergroup");
                         }
         |        yCOVERGROUP yEXTENDS idAny ';'
         /*cont*/     coverage_spec_or_optionListE
         /*cont*/ yENDGROUP endLabelE
                         { AstClass *cgClassp = new AstClass{$<fl>3, *$3, PARSEP->libname()};
+                          cgClassp->isCovergroup(true);
                           AstFunc* const newp = new AstFunc{$<fl>1, "new", nullptr, nullptr};
                           newp->fileline()->warnOff(V3ErrorCode::NORETURN, true);
                           newp->classMethod(true);
